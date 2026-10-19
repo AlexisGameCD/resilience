@@ -1,0 +1,41 @@
+# Table de decision de la remediation : signature d'incident -> actions.
+# Versionnee et auditable. Le moteur n'execute QUE des actions definies ici.
+# Les actions passent par l'API Portainer (chemin rapide) et sont tracees par une tache
+# Ansible via Semaphore (chemin audite). Aucun socket Docker brut, aucun shell.
+
+version: 1
+
+# Action par defaut si la signature n'est pas reconnue
+default:
+  description: "Anomalie non categorisee : redemarrage prudent du service cible"
+  actions:
+    - type: restart
+      service: payment-api
+
+signatures:
+
+  payment-api_unavailable:
+    description: "Service injoignable (conteneur arrete ou plante) : relance du conteneur"
+    actions:
+      - type: start
+        service: payment-api
+      - type: restart
+        service: payment-api
+
+  payment-api_degraded:
+    description: "Degradation sous charge ou requetes hostiles : relance pour liberer les ressources"
+    actions:
+      - type: restart
+        service: payment-api
+    notes: "Le WAF filtre deja les requetes malformees ; la relance libere les connexions saturees."
+
+  payment-api_anomaly:
+    description: "Ecart comportemental detecte par le modele : relance de precaution"
+    actions:
+      - type: restart
+        service: payment-api
+
+# Verification de reprise appliquee apres CHAQUE remediation
+verification:
+  business_check: true          # une nouvelle transaction fictive doit reussir
+  health_timeout_seconds: 60    # delai max d'attente du retour a un etat utilisable

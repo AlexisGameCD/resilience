@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PayAlpha : paiement fictif</title>
+  <style>
+    :root { --ink:#261E48; --bg:#E4E6F3; --accent:#A1A6D4; }
+    * { box-sizing: border-box; font-family: system-ui, Segoe UI, Roboto, sans-serif; }
+    body { margin:0; background:var(--bg); color:var(--ink); display:flex; min-height:100vh; align-items:center; justify-content:center; }
+    .card { background:#fff; border-radius:14px; padding:28px 32px; width:380px; box-shadow:0 10px 30px rgba(38,30,72,.12); }
+    h1 { font-size:20px; margin:0 0 4px; }
+    p.sub { margin:0 0 18px; color:#6b6b8a; font-size:13px; }
+    label { display:block; font-size:12px; margin:12px 0 4px; font-weight:600; }
+    input, select { width:100%; padding:9px 10px; border:1px solid var(--accent); border-radius:8px; font-size:14px; }
+    button { margin-top:18px; width:100%; padding:11px; border:0; border-radius:8px; background:var(--ink); color:#fff; font-size:14px; cursor:pointer; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .out { margin-top:16px; font-size:13px; padding:10px; border-radius:8px; white-space:pre-wrap; display:none; }
+    .ok { background:#e8f6ee; color:#1b6b3a; }
+    .ko { background:#fbe9e9; color:#a12222; }
+    .tag { display:inline-block; background:var(--accent); color:#fff; font-size:10px; padding:2px 8px; border-radius:20px; letter-spacing:.5px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="tag">PROJECT RESILIENCE-ALPHA</span>
+    <h1>PayAlpha</h1>
+    <p class="sub">Plateforme de paiement fictive. Donnees de demonstration uniquement.</p>
+
+    <label>Identifiant</label>
+    <input id="user" value="alice" />
+    <label>Mot de passe</label>
+    <input id="pass" type="password" value="Demo#2026" />
+
+    <label>Compte source</label>
+    <select id="src">
+      <option value="FR76-FAKE-0001">FR76-FAKE-0001 (alice)</option>
+      <option value="FR76-FAKE-0002">FR76-FAKE-0002 (bob)</option>
+    </select>
+    <label>Beneficiaire</label>
+    <select id="dst">
+      <option value="FR76-FAKE-9001">FR76-FAKE-9001 (cafe)</option>
+      <option value="FR76-FAKE-9002">FR76-FAKE-9002 (store)</option>
+    </select>
+    <label>Montant (EUR fictifs)</label>
+    <input id="amount" type="number" value="12.50" step="0.01" min="0.01" />
+
+    <button id="pay">Payer</button>
+    <div id="out" class="out"></div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const out = $("out");
+    function show(ok, msg) { out.style.display = "block"; out.className = "out " + (ok ? "ok" : "ko"); out.textContent = msg; }
+
+    async function login() {
+      const r = await fetch("/api/login", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: $("user").value, password: $("pass").value })
+      });
+      if (!r.ok) throw new Error("authentification refusee");
+      return (await r.json()).access_token;
+    }
+
+    async function pay() {
+      $("pay").disabled = true;
+      show(true, "Traitement en cours...");
+      try {
+        const token = await login();
+        const r = await fetch("/api/payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+          body: JSON.stringify({ src_iban: $("src").value, dst_iban: $("dst").value, amount: Number($("amount").value) })
+        });
+        const data = await r.json();
+        if (!r.ok) { show(false, "Echec : " + (data.detail || r.status)); }
+        else { show(true, "Transaction reussie\nReference : " + data.reference + "\nMontant : " + data.amount + " EUR"); }
+      } catch (e) {
+        show(false, "Service indisponible : " + e.message);
+      } finally {
+        $("pay").disabled = false;
+      }
+    }
+    $("pay").addEventListener("click", pay);
+  </script>
+</body>
+</html>

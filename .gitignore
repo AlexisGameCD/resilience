@@ -1,0 +1,33 @@
+# Secrets et environnement
+.env
+*.key
+*.pem
+secrets/*.dec.*
+security/secrets/*.dec.yaml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Node / front
+node_modules/
+services/dashboard/dist/
+services/dashboard/build/
+
+# Modeles et donnees volumineuses (regenerables)
+ml/data/*.csv
+ml/model/*.joblib
+!ml/model/.gitkeep
+
+# Logs et artefacts locaux
+*.log
+logs/
+chroma/
+captures/
+
+# OS
+.DS_Store
+Thumbs.db

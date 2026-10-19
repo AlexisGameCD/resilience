@@ -1,0 +1,74 @@
+---
+# Operations de reprise RESILIENCE-ALPHA.
+#
+# Deux usages :
+#   - action=verify (defaut) : verification metier 100% HTTP, sans Docker. C'est la tache
+#     declenchee par le moteur de remediation via Semaphore (chemin d'audit). Elle rejoue
+#     une transaction fictive et laisse une trace horodatee dans l'historique Semaphore.
+#   - action=restart / start : operations Docker sur le PC Hote (runner avec acces Docker).
+#
+# Exemples :
+#   ansible-playbook playbooks/remediate.yml -e "action=verify"
+#   ansible-playbook playbooks/remediate.yml -e "action=restart target_service=payment-api"
+
+- name: Operations de reprise RESILIENCE-ALPHA
+  hosts: hote
+  gather_facts: false
+  vars:
+    project_root: "{{ playbook_dir }}/../../.."
+    action: verify
+    target_service: payment-api
+    gateway: "{{ lookup('env', 'GATEWAY_URL') | default('http://waf:8080', true) }}"
+    verify_user: alice
+    verify_pass: "Demo#2026"
+    verify_src: FR76-FAKE-0001
+    verify_dst: FR76-FAKE-9001
+    incident_id: manuel
+
+  tasks:
+    - name: Redemarrer un service degrade (runner avec Docker)
+      ansible.builtin.command: "docker compose restart {{ target_service }}"
+      args:
+        chdir: "{{ project_root }}"
+      when: action == "restart"
+      changed_when: true
+
+    - name: Relancer un service arrete (runner avec Docker)
+      ansible.builtin.command: "docker compose up -d {{ target_service }}"
+      args:
+        chdir: "{{ project_root }}"
+      when: action == "start"
+      changed_when: true
+
+    # --- Verification metier, 100% HTTP (chemin d'audit, sans Docker) ---
+    - name: Authentification (obtenir un JWT)
+      ansible.builtin.uri:
+        url: "{{ gateway }}/login"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ verify_user }}"
+          password: "{{ verify_pass }}"
+        status_code: 200
+      register: login
+      when: action == "verify"
+
+    - name: Rejouer une transaction fictive de preuve
+      ansible.builtin.uri:
+        url: "{{ gateway }}/payments"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ login.json.access_token }}"
+        body_format: json
+        body:
+          src_iban: "{{ verify_src }}"
+          dst_iban: "{{ verify_dst }}"
+          amount: 1.00
+        status_code: 201
+      register: tx
+      when: action == "verify"
+
+    - name: Trace de la verification
+      ansible.builtin.debug:
+        msg: "Reprise verifiee (incident {{ incident_id }}) : transaction {{ tx.json.reference }}"
+      when: action == "verify"

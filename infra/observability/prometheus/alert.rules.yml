@@ -1,0 +1,35 @@
+# Regles d'alerte Prometheus : vue operateur complementaire.
+# Important : la DETECTION d'incident du projet repose sur le modele ML du
+# detection-service, pas sur ces seuils. Ces regles servent l'observabilite et
+# la correlation dans Grafana, pas la decision de remediation.
+
+groups:
+  - name: payalpha-context
+    rules:
+      - alert: PaymentApiDown
+        expr: up{service="payment-api"} == 0
+        for: 20s
+        labels:
+          severity: critical
+        annotations:
+          summary: "payment-api injoignable par Prometheus"
+
+      - alert: HighErrorRateContext
+        expr: |
+          sum(rate(http_requests_total{service="payment-api",status=~"5.."}[1m]))
+            / clamp_min(sum(rate(http_requests_total{service="payment-api"}[1m])), 0.001) > 0.2
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taux d'erreur 5xx eleve sur payment-api (vue contextuelle)"
+
+      - alert: LatencyP95ContextHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{service="payment-api"}[1m])) by (le)) > 1.5
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latence p95 payment-api elevee (vue contextuelle)"

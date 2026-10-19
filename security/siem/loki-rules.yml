@@ -1,0 +1,23 @@
+# Regles d'alerte Loki (ruler) pour la fonction SOC.
+# Optionnel : pour les activer, pointer le ruler de Loki vers ce fichier
+# (storage local) et redemarrer Loki. Documente ici pour la traabilite.
+
+groups:
+  - name: resilience-alpha-soc
+    rules:
+      - alert: WafBlockingBurst
+        expr: sum(count_over_time({service="waf"} |= "RESILIENCE-ALPHA" [1m])) > 5
+        for: 0m
+        labels:
+          severity: warning
+          mitre: T1190
+        annotations:
+          summary: "Rafale de blocages WAF (possible exploitation d'application exposee)"
+
+      - alert: RemediationFailed
+        expr: sum(count_over_time({service="remediation-service"} |= "non resolu" [2m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Une remediation automatique a echoue dans le delai imparti"

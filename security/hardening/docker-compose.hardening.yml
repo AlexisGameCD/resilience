@@ -1,0 +1,46 @@
+# Couche de durcissement activable en complement du docker-compose principal.
+# Usage :
+#   docker compose -f docker-compose.yml -f security/hardening/docker-compose.hardening.yml up -d
+#
+# Applique le moindre privilege : pas d'elevation, abandon des capacites Linux,
+# racine en lecture seule la ou le service le supporte.
+
+services:
+  payment-api:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  auth-service:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  detection-service:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  remediation-service:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  waf:
+    security_opt:
+      - no-new-privileges:true
+
+  # Semaphore a besoin d'acces (git) : on evite read_only, mais on empeche l'elevation.
+  semaphore:
+    security_opt:
+      - no-new-privileges:true

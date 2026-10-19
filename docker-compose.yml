@@ -1,0 +1,304 @@
+name: resilience-alpha
+
+# Exposition maitrisee : seuls waf, web-front, dashboard et grafana publient un port.
+# Base de donnees, observabilite interne, secrets et moteur de remediation restent
+# accessibles uniquement sur le reseau interne backnet.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+networks:
+  frontnet:
+    driver: bridge
+  backnet:
+    driver: bridge
+
+volumes:
+  pgdata:
+  grafana-data:
+  loki-data:
+  vault-data:
+  chroma-data:
+  semaphore-data:
+
+services:
+
+  # ---------------------------------------------------------------- base de donnees
+  postgres:
+    build: ./infra/postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backnet]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- authentification
+  auth-service:
+    build: ./services/auth-service
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_TTL_SECONDS: "900"
+      LOG_LEVEL: INFO
+    networks: [backnet]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- api metier paiement
+  payment-api:
+    build: ./services/payment-api
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AUTH_URL: http://auth-service:8000
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: INFO
+    networks: [backnet]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+    restart: unless-stopped
+    labels:
+      resilience.managed: "true"
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- WAF (entree des API)
+  waf:
+    build: ./infra/waf
+    environment:
+      # payment-api joue le role de passerelle (il delegue l'auth a auth-service)
+      BACKEND: http://payment-api:8000
+      PORT: "8080"
+      PARANOIA: "1"
+      MODSEC_RULE_ENGINE: "On"
+      MODSEC_AUDIT_ENGINE: "RelevantOnly"
+      MODSEC_AUDIT_LOG: /dev/stdout
+      MODSEC_AUDIT_LOG_FORMAT: JSON
+    ports:
+      - "8080:8080"
+    networks: [frontnet, backnet]
+    depends_on:
+      - payment-api
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- front paiement
+  web-front:
+    build: ./services/web-front
+    ports:
+      - "8081:80"
+    networks: [frontnet]
+    depends_on:
+      - waf
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- observabilite
+  prometheus:
+    build: ./infra/observability/prometheus
+    networks: [backnet]
+    restart: unless-stopped
+    logging: *default-logging
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    networks: [backnet]
+    restart: unless-stopped
+    logging: *default-logging
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks: [backnet]
+    restart: unless-stopped
+    logging: *default-logging
+
+  loki:
+    build: ./infra/observability/loki
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - loki-data:/loki
+    networks: [backnet]
+    restart: unless-stopped
+    logging: *default-logging
+
+  promtail:
+    build: ./infra/observability/promtail
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [backnet]
+    depends_on:
+      - loki
+    restart: unless-stopped
+    logging: *default-logging
+
+  grafana:
+    build: ./infra/observability/grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks: [backnet, frontnet]
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- secrets
+  vault:
+    image: hashicorp/vault:1.17
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_TOKEN}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_TOKEN: ${VAULT_DEV_TOKEN}
+    volumes:
+      - vault-data:/vault/file
+    networks: [backnet]
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Portainer n'est PAS dans la stack : il est installe separement et c'est lui qui
+  # deploie cette stack. Le moteur de remediation l'appelle via host.docker.internal:9000.
+
+  # ---------------------------------------------------------------- automatisation Ansible
+  semaphore:
+    image: semaphoreui/semaphore:v2.19.16
+    environment:
+      SEMAPHORE_DB_DIALECT: bolt
+      SEMAPHORE_ADMIN: ${SEMAPHORE_ADMIN}
+      SEMAPHORE_ADMIN_PASSWORD: ${SEMAPHORE_ADMIN_PASSWORD}
+      SEMAPHORE_ADMIN_NAME: Administrator
+      SEMAPHORE_ADMIN_EMAIL: admin@localhost
+      SEMAPHORE_PLAYBOOK_PATH: /tmp/semaphore
+      TZ: Europe/Paris
+    volumes:
+      - semaphore-data:/var/lib/semaphore
+      # Semaphore clone les playbooks directement depuis le depot GitHub
+      # (voir docs/portainer-semaphore.md), plus aucun montage local.
+    ports:
+      - "3001:3000"
+    networks: [backnet, frontnet]
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- detection ML
+  detection-service:
+    build: ./services/detection-service
+    environment:
+      PROMETHEUS_URL: http://prometheus:9090
+      LOKI_URL: http://loki:3100
+      REMEDIATION_URL: http://remediation-service:8000
+      REM_API_KEY: ${REM_API_KEY}
+      MODEL_PATH: /app/model/anomaly.joblib
+      SCRAPE_INTERVAL_SECONDS: "15"
+      LOG_LEVEL: INFO
+    networks: [backnet]
+    depends_on:
+      - prometheus
+      - remediation-service
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- moteur de remediation
+  remediation-service:
+    build: ./services/remediation-service
+    environment:
+      PLAYBOOK_PATH: /app/playbooks.yml
+      REM_API_KEY: ${REM_API_KEY}
+      PAYMENT_INTERNAL_URL: http://payment-api:8000
+      # Chemin rapide : API du Portainer externe (installe separement)
+      PORTAINER_URL: ${PORTAINER_URL}
+      PORTAINER_USER: ${PORTAINER_USER}
+      PORTAINER_PASSWORD: ${PORTAINER_PASSWORD}
+      PORTAINER_API_KEY: ${PORTAINER_API_KEY}
+      PORTAINER_ENDPOINT_ID: ${PORTAINER_ENDPOINT_ID:-1}
+      # Chemin audite : tache Ansible via l'API Semaphore (best-effort)
+      AUDIT_ENABLED: "true"
+      SEMAPHORE_URL: http://semaphore:3000
+      SEMAPHORE_API_TOKEN: ${SEMAPHORE_API_TOKEN}
+      SEMAPHORE_PROJECT_ID: ${SEMAPHORE_PROJECT_ID}
+      SEMAPHORE_TEMPLATE_ID: ${SEMAPHORE_TEMPLATE_ID}
+      LOG_LEVEL: INFO
+    networks: [backnet]
+    extra_hosts:
+      # Permet d'atteindre le Portainer externe publie sur le PC Hote
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 4
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- assistant RAG local
+  assistant-service:
+    build: ./services/assistant-service
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      LOKI_URL: http://loki:3100
+      CHROMA_PATH: /data/chroma
+      DOCS_PATH: /app/ragdocs
+      LOG_LEVEL: INFO
+    volumes:
+      - chroma-data:/data/chroma
+    networks: [backnet, frontnet]
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- dashboard supervision
+  dashboard:
+    build: ./services/dashboard
+    environment:
+      DETECTION_URL: http://detection-service:8000
+      REMEDIATION_URL: http://remediation-service:8000
+      PROMETHEUS_URL: http://prometheus:9090
+      ASSISTANT_URL: http://assistant-service:8000
+    ports:
+      - "8082:80"
+    networks: [backnet, frontnet]
+    depends_on:
+      - detection-service
+      - remediation-service
+    restart: unless-stopped
+    logging: *default-logging

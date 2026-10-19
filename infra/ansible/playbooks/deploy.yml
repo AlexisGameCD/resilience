@@ -1,0 +1,58 @@
+---
+# Deploiement reproductible de PROJECT RESILIENCE-ALPHA sur le PC Hote.
+# Usage : ansible-playbook playbooks/deploy.yml
+# Prerequis : Docker Desktop (WSL2) demarre, depot clone, .env renseigne.
+
+- name: Deployer la plateforme RESILIENCE-ALPHA
+  hosts: hote
+  gather_facts: false
+  vars:
+    project_root: "{{ playbook_dir }}/../../.."
+
+  tasks:
+    - name: Verifier la presence de Docker
+      ansible.builtin.command: docker version
+      changed_when: false
+
+    - name: Creer le fichier .env s'il est absent
+      ansible.builtin.copy:
+        src: "{{ project_root }}/.env.example"
+        dest: "{{ project_root }}/.env"
+        force: false
+      register: envfile
+
+    - name: Avertir si .env vient d'etre cree
+      ansible.builtin.debug:
+        msg: "ATTENTION : .env cree depuis l'exemple. Adaptez les secrets avant une vraie demonstration."
+      when: envfile.changed
+
+    - name: Construire et demarrer la plateforme
+      ansible.builtin.command:
+        cmd: docker compose up -d --build
+        chdir: "{{ project_root }}"
+      register: compose_up
+      changed_when: "'Started' in compose_up.stderr or 'Created' in compose_up.stderr"
+
+    - name: Attendre que payment-api soit en bonne sante (via le WAF)
+      ansible.builtin.uri:
+        url: http://localhost:8080/health
+        status_code: 200
+      register: hc
+      retries: 20
+      delay: 6
+      until: hc.status == 200
+
+    - name: Injecter un trafic nominal de reference
+      ansible.builtin.command:
+        cmd: python3 scripts/seed_traffic.py 60 0.5
+        chdir: "{{ project_root }}"
+      changed_when: true
+
+    - name: Resume
+      ansible.builtin.debug:
+        msg:
+          - "Plateforme deployee."
+          - "Front paiement   : http://localhost:8081"
+          - "Dashboard         : http://localhost:8082"
+          - "Grafana           : http://localhost:3000"
+          - "API (via WAF)     : http://localhost:8080"

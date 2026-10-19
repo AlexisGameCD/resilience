@@ -1,0 +1,35 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Collecte des journaux de tous les conteneurs via le socket Docker
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 10s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: service
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: stream
+    pipeline_stages:
+      # Les services FastAPI loguent en JSON : on extrait le niveau pour la correlation SIEM
+      - match:
+          selector: '{service=~"payment-api|auth-service|remediation-service|detection-service"}'
+          stages:
+            - json:
+                expressions:
+                  level: lvl
+                  svc: svc
+            - labels:
+                level:

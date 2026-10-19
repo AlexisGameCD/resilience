@@ -1,0 +1,56 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "schemaVersion": 39,
+  "title": "RESILIENCE-ALPHA : SOC et securite",
+  "tags": ["resilience-alpha", "soc"],
+  "time": { "from": "now-30m", "to": "now" },
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Blocages WAF par minute (T1190)",
+      "type": "timeseries",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "refId": "A",
+          "expr": "sum(count_over_time({service=\"waf\"} |= \"RESILIENCE-ALPHA\" [1m]))",
+          "legendFormat": "blocages/min" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Echecs d'authentification par seconde (T1110)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "refId": "A",
+          "expr": "sum(rate(auth_login_failed_total[1m]))",
+          "legendFormat": "echecs/s" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Incidents remedies (cumul) et RTO",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum(remediation_runs_total)", "legendFormat": "remediations" },
+        { "refId": "B", "expr": "histogram_quantile(0.9, sum(rate(remediation_rto_seconds_bucket[5m])) by (le))", "legendFormat": "RTO p90 (s)" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Journal des evenements de securite WAF",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "refId": "A", "expr": "{service=\"waf\"} |= \"RESILIENCE-ALPHA\"" }
+      ]
+    }
+  ]
+}
