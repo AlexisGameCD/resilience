@@ -171,6 +171,10 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
+      # --- AJOUTS POUR LE PROVISIONING GIT ---
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards_json:/etc/grafana/dashboards_json:ro
+      # ---------------------------------------
     ports:
       - "3000:3000"
     networks: [backnet, frontnet]
