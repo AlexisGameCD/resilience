@@ -7,8 +7,8 @@
     "mem_mb",
     "inflight"
   ],
-  "trained_on": 4000,
-  "score_mean_normal": -0.4570538532637588,
-  "score_p01_normal": -0.6036128755210093,
+  "trained_on": 6000,
+  "score_mean_normal": -0.4763411065513804,
+  "score_p01_normal": -0.6142389268355376,
   "sklearn_contract": "predict == -1 => anomalie ; score_samples bas => anormal"
 }

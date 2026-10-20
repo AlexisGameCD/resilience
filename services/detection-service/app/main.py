@@ -72,14 +72,23 @@ _model = None
 
 
 # ----------------------------------------------------------------------- modele
-def _synthetic_normal(n=4000):
+def _synthetic_normal(n=6000):
+    # Trois regimes de trafic sain : repos, leger, soutenu (meme loi que l'entrainement).
     rng = np.random.default_rng(42)
-    req = np.clip(rng.normal(5.0, 1.4, n), 0.2, None)
-    p95 = np.clip(0.10 + 0.012 * req + rng.normal(0, 0.02, n), 0.03, None)
-    err = np.clip(rng.normal(0.004, 0.004, n), 0.0, 0.05)
-    cpu = np.clip(0.03 + 0.03 * req + rng.normal(0, 0.02, n), 0.0, None)
-    mem = np.clip(rng.normal(140, 18, n), 80, None)
-    inf = np.clip(rng.poisson(np.clip(req * 0.3, 0.1, None)), 0, None).astype(float)
+    a = n // 3
+    b = n // 3
+    c = n - a - b
+    req = np.concatenate([
+        rng.uniform(0.05, 0.6, a),
+        rng.uniform(0.6, 3.0, b),
+        rng.uniform(3.0, 9.0, c),
+    ])
+    rng.shuffle(req)
+    p95 = np.clip(0.006 + 0.014 * req + rng.normal(0, 0.008, n), 0.003, None)
+    err = np.clip(rng.normal(0.003, 0.004, n), 0.0, 0.04)
+    cpu = np.clip(0.07 + 0.02 * req + rng.normal(0, 0.012, n), 0.02, None)
+    mem = np.clip(rng.normal(140, 15, n), 90, None)
+    inf = np.clip(rng.poisson(np.clip(0.7 + 0.3 * req, 0.2, None)), 0, None).astype(float)
     return np.column_stack([req, err, p95, cpu, mem, inf])
 
 
@@ -89,7 +98,7 @@ def _fallback_train():
     from sklearn.preprocessing import StandardScaler
     X = _synthetic_normal()
     pipe = Pipeline([("scaler", StandardScaler()),
-                     ("iforest", IsolationForest(n_estimators=200, contamination=0.02,
+                     ("iforest", IsolationForest(n_estimators=250, contamination=0.01,
                                                  random_state=42, n_jobs=1))])
     pipe.fit(X)
     scores = pipe.score_samples(X)
