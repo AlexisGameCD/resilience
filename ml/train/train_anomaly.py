@@ -35,15 +35,25 @@ MODEL_DIR = os.path.join(HERE, "..", "model")
 RNG = np.random.default_rng(42)
 
 
-def generate_normal(n=4000):
-    """Genere un echantillon de trafic sain, aux correlations plausibles."""
-    req_rate = np.clip(RNG.normal(5.0, 1.4, n), 0.2, None)
-    # latence qui monte legerement avec la charge
-    p95 = np.clip(0.10 + 0.012 * req_rate + RNG.normal(0, 0.02, n), 0.03, None)
-    error_ratio = np.clip(RNG.normal(0.004, 0.004, n), 0.0, 0.05)
-    cpu = np.clip(0.03 + 0.03 * req_rate + RNG.normal(0, 0.02, n), 0.0, None)
-    mem_mb = np.clip(RNG.normal(140, 18, n), 80, None)
-    inflight = np.clip(RNG.poisson(np.clip(req_rate * 0.3, 0.1, None)), 0, None).astype(float)
+def generate_normal(n=6000):
+    """Genere un echantillon de trafic sain couvrant trois regimes reels :
+    repos, trafic leger et trafic soutenu. Ainsi le modele considere aussi
+    l'etat au repos comme normal et ne reagit qu'aux vrais ecarts."""
+    a = n // 3
+    b = n // 3
+    c = n - a - b
+    req_rate = np.concatenate([
+        RNG.uniform(0.05, 0.6, a),   # repos (peu ou pas de trafic)
+        RNG.uniform(0.6, 3.0, b),    # trafic leger
+        RNG.uniform(3.0, 9.0, c),    # trafic soutenu
+    ])
+    RNG.shuffle(req_rate)
+    # Caracteristiques correlees a la charge.
+    p95 = np.clip(0.006 + 0.014 * req_rate + RNG.normal(0, 0.008, n), 0.003, None)
+    error_ratio = np.clip(RNG.normal(0.003, 0.004, n), 0.0, 0.04)
+    cpu = np.clip(0.07 + 0.02 * req_rate + RNG.normal(0, 0.012, n), 0.02, None)
+    mem_mb = np.clip(RNG.normal(140, 15, n), 90, None)
+    inflight = np.clip(RNG.poisson(np.clip(0.7 + 0.3 * req_rate, 0.2, None)), 0, None).astype(float)
     df = pd.DataFrame({
         "req_rate": req_rate, "error_ratio": error_ratio, "p95_latency": p95,
         "cpu": cpu, "mem_mb": mem_mb, "inflight": inflight,
@@ -63,7 +73,7 @@ def main():
     pipe = Pipeline([
         ("scaler", StandardScaler()),
         ("iforest", IsolationForest(
-            n_estimators=200, contamination=0.02, random_state=42, n_jobs=1)),
+            n_estimators=250, contamination=0.01, random_state=42, n_jobs=1)),
     ])
     pipe.fit(df.values)
 
