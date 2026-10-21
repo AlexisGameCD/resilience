@@ -196,7 +196,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{service=\"payment-api\",status=~\"5..\"}[1m])) / clamp_min(sum(rate(http_requests_total{service=\"payment-api\"}[1m])), 0.001)",
+          "expr": "(sum(rate(http_requests_total{service=\"payment-api\",status=~\"5..\"}[1m])) / clamp_min(sum(rate(http_requests_total{service=\"payment-api\"}[1m])), 0.001)) or vector(0)",
           "legendFormat": "erreurs",
           "refId": "A",
           "datasource": {
@@ -419,7 +419,7 @@
       },
       "targets": [
         {
-          "expr": "{service=~\"payment-api|auth-service|waf\"} |= \"ERROR\"",
+          "expr": "{service=~\"payment-api|auth-service|waf\"} |~ \"(?i)error\"",
           "refId": "A",
           "datasource": {
             "type": "loki",
