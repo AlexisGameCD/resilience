@@ -276,13 +276,13 @@ services:
     logging: *default-logging
 
   # ---------------------------------------------------------------- assistant RAG local
-  assistant-service:
+    assistant-service:
     build: ./services/assistant-service
     environment:
-      OLLAMA_URL: ${OLLAMA_URL}
-      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       LOKI_URL: http://loki:3100
-      CHROMA_PATH: /data/chroma
+      CHROMA_PATH: /tmp/chroma
       DOCS_PATH: /app/ragdocs
       LOG_LEVEL: INFO
     volumes:
