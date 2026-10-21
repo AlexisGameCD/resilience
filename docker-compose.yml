@@ -135,6 +135,9 @@ services:
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
+    # Incompatible macOS (monte /, /sys, /var/lib/docker). Desactive par defaut.
+    # Pour l'activer sur Linux/WSL2 : docker compose --profile host-metrics up -d
+    profiles: ["host-metrics"]
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -157,7 +160,6 @@ services:
     build: ./infra/observability/promtail
     command: -config.file=/etc/promtail/promtail-config.yml
     volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks: [backnet]
     depends_on:
