@@ -276,7 +276,7 @@ services:
     logging: *default-logging
 
   # ---------------------------------------------------------------- assistant RAG local
-    assistant-service:
+   assistant-service:
     build: ./services/assistant-service
     environment:
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
@@ -290,7 +290,6 @@ services:
     networks: [backnet, frontnet]
     restart: unless-stopped
     logging: *default-logging
-
   # ---------------------------------------------------------------- dashboard supervision
   dashboard:
     build: ./services/dashboard
