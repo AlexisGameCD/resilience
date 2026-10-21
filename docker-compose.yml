@@ -172,10 +172,6 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
-      # --- AJOUTS POUR LE PROVISIONING GIT ---
-      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./infra/observability/grafana/dashboards_json:/etc/grafana/dashboards_json:ro
-      # ---------------------------------------
     ports:
       - "3000:3000"
     networks: [backnet, frontnet]
@@ -279,10 +275,10 @@ services:
   assistant-service:
     build: ./services/assistant-service
     environment:
-      OLLAMA_URL: ${OLLAMA_URL}
-      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       LOKI_URL: http://loki:3100
-      CHROMA_PATH: /data/chroma
+      CHROMA_PATH: /tmp/chroma
       DOCS_PATH: /app/ragdocs
       LOG_LEVEL: INFO
     volumes:
@@ -290,7 +286,6 @@ services:
     networks: [backnet, frontnet]
     restart: unless-stopped
     logging: *default-logging
-
   # ---------------------------------------------------------------- dashboard supervision
   dashboard:
     build: ./services/dashboard
