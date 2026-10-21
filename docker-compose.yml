@@ -100,6 +100,7 @@ services:
       MODSEC_AUDIT_ENGINE: "RelevantOnly"
       MODSEC_AUDIT_LOG: /dev/stdout
       MODSEC_AUDIT_LOG_FORMAT: JSON
+      TZ: Europe/Paris
     ports:
       - "8080:8080"
     networks: [frontnet, backnet]
