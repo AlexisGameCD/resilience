@@ -36,7 +36,7 @@
 const int GREEN_PIN = D1;              // GPIO5
 const int RED_PIN   = D2;              // GPIO4
 const unsigned long POLL_INTERVAL = 300;   // ms entre deux interrogations
-const unsigned long BLINK_PERIOD  = 500;   // ms (demi-periode de clignotement)
+const unsigned long BLINK_PERIOD  = 250;   // ms (demi-periode : 10 clignotements sur les 5 s de red_blink_10)
 
 String currentDisplay = "off";
 unsigned long lastPoll = 0, lastBlink = 0;

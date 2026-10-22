@@ -39,7 +39,7 @@
     .led { width:20px; height:20px; border-radius:50%; background:#555; box-shadow:0 0 0 3px rgba(255,255,255,.12) inset; }
     .led.green { background:var(--green); box-shadow:0 0 14px var(--green); }
     .led.red { background:var(--red); box-shadow:0 0 14px var(--red); }
-    .led.blink { animation: blink 1s steps(1) infinite; }
+    .led.blink { animation: blink 0.5s steps(1) infinite; }   /* 10 clignotements sur les 5 s de red_blink_10 */
     @keyframes blink { 50% { opacity:.12; box-shadow:none; } }
     .hint { font-size:12px; color:#6b6b8a; margin-top:8px; }
     .countdown { font-size:34px; font-weight:700; text-align:center; margin:14px 0; }
@@ -192,10 +192,10 @@
     }
 
     // ------------------------------------------------------------- flux d'acces
-    function resetToUsername() {
+    function resetToUsername(keepLed) {
       stopCamera($("cam"));
       $("user").value = ""; $("pass").value = "";
-      setLed("off");
+      if (!keepLed) setLed("off");   // sur mauvais mot de passe, laisser le rouge clignoter jusqu'au bout
       $("accesOut").style.display = "none";
       showStep("step-username");
     }
@@ -265,10 +265,10 @@
           $("whorole").textContent = (claims && claims.role) || "operateur";
           showStep("granted");
         } else {
-          // Mauvais mot de passe : rouge clignotant 10x, puis toute la phase recommence.
+          // Mauvais mot de passe : rouge clignote 10 fois (~5 s) puis s'eteint, puis reprise.
           setLed("red_blink_10");
-          show($("accesOut"), false, "Mot de passe incorrect. Reprise de l'identification.");
-          setTimeout(resetToUsername, 1500);
+          show($("accesOut"), false, "Mot de passe incorrect. La LED clignote en rouge, reprise dans quelques secondes.");
+          setTimeout(() => resetToUsername(true), 5200);
         }
       } catch (e) {
         show($("accesOut"), false, "Service d'authentification indisponible.");
