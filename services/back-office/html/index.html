@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Back-office RESILIENCE-ALPHA</title>
+  <style>
+    :root { --ink:#261E48; --bg:#E4E6F3; --accent:#A1A6D4; --green:#1f9d57; --red:#cf2e2e; }
+    * { box-sizing:border-box; font-family: system-ui, Segoe UI, Roboto, sans-serif; }
+    body { margin:0; background:var(--bg); color:var(--ink); min-height:100vh; }
+    header { display:flex; align-items:center; gap:14px; padding:14px 22px; background:var(--ink); color:#fff; }
+    header h1 { font-size:16px; margin:0; font-weight:600; letter-spacing:.3px; }
+    header .spacer { flex:1; }
+    header a { color:#cdd0ee; font-size:12px; text-decoration:none; }
+    .wrap { max-width:720px; margin:26px auto; padding:0 16px; }
+    .card { background:#fff; border-radius:14px; padding:24px 26px; box-shadow:0 10px 30px rgba(38,30,72,.12); }
+    .tag { display:inline-block; background:var(--accent); color:#fff; font-size:10px; padding:2px 8px; border-radius:20px; letter-spacing:.5px; }
+    h2 { font-size:18px; margin:6px 0 2px; }
+    p.sub { margin:0 0 16px; color:#6b6b8a; font-size:13px; }
+    label { display:block; font-size:12px; margin:12px 0 4px; font-weight:600; }
+    input, select { width:100%; padding:10px; border:1px solid var(--accent); border-radius:8px; font-size:14px; }
+    button { margin-top:16px; width:100%; padding:11px; border:0; border-radius:8px; background:var(--ink); color:#fff; font-size:14px; cursor:pointer; }
+    button.alt { background:#fff; color:var(--ink); border:1px solid var(--accent); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .out { margin-top:14px; font-size:13px; padding:10px; border-radius:8px; white-space:pre-wrap; display:none; }
+    .ok { background:#e8f6ee; color:#1b6b3a; } .ko { background:#fbe9e9; color:#a12222; } .info { background:#eef0fb; color:#39407a; }
+    video { width:100%; border-radius:10px; background:#111; margin-top:10px; transform:scaleX(-1); }
+    .tabs { display:flex; gap:8px; margin-bottom:16px; }
+    .tabs button { margin:0; width:auto; padding:8px 14px; font-size:13px; background:#fff; color:var(--ink); border:1px solid var(--accent); }
+    .tabs button.active { background:var(--ink); color:#fff; }
+    .steps { font-size:12px; color:#6b6b8a; margin-bottom:10px; }
+    .steps b { color:var(--ink); }
+    table { width:100%; border-collapse:collapse; margin-top:12px; font-size:13px; }
+    th, td { text-align:left; padding:7px 8px; border-bottom:1px solid #ecedf7; }
+    .pill { font-size:11px; padding:2px 8px; border-radius:20px; }
+    .pill.on { background:#e8f6ee; color:#1b6b3a; } .pill.off { background:#fbe9e9; color:#a12222; }
+    .row-actions button { margin:0 0 0 6px; width:auto; padding:5px 9px; font-size:11px; }
+    /* LED */
+    .led { width:20px; height:20px; border-radius:50%; background:#555; box-shadow:0 0 0 3px rgba(255,255,255,.12) inset; }
+    .led.green { background:var(--green); box-shadow:0 0 14px var(--green); }
+    .led.red { background:var(--red); box-shadow:0 0 14px var(--red); }
+    .led.blink { animation: blink 1s steps(1) infinite; }
+    @keyframes blink { 50% { opacity:.12; box-shadow:none; } }
+    .hint { font-size:12px; color:#6b6b8a; margin-top:8px; }
+    .countdown { font-size:34px; font-weight:700; text-align:center; margin:14px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="led" id="ledDot" title="LED bicolore"></span>
+    <h1>Back-office RESILIENCE-ALPHA</h1>
+    <span class="spacer"></span>
+    <a href="/led.html" target="_blank">Simulateur LED plein ecran</a>
+  </header>
+
+  <div class="wrap">
+    <div class="tabs">
+      <button id="tabAcces" class="active" onclick="showTab('acces')">Acces securise</button>
+      <button id="tabAdmin" onclick="showTab('admin')">Habilitations</button>
+    </div>
+
+    <!-- ================= ACCES ================= -->
+    <div id="acces" class="card">
+      <span class="tag">AUTHENTIFICATION RENFORCEE</span>
+
+      <!-- Etape 1 : identifiant -->
+      <div id="step-username">
+        <h2>Identification</h2>
+        <p class="sub">Saisissez votre identifiant. La camera du poste confirmera votre visage avant le mot de passe.</p>
+        <div class="steps"><b>1. Identifiant</b> &rsaquo; 2. Visage &rsaquo; 3. Mot de passe</div>
+        <label>Identifiant</label>
+        <input id="user" autocomplete="off" placeholder="ex. alice" />
+        <button id="btnUser" onclick="onUsername()">Continuer</button>
+      </div>
+
+      <!-- Etape 2 : camera / visage -->
+      <div id="step-camera" style="display:none">
+        <h2>Verification du visage</h2>
+        <p class="sub">Regardez la camera. La reconnaissance se fait sur le PC Hote.</p>
+        <div class="steps">1. Identifiant &rsaquo; <b>2. Visage</b> &rsaquo; 3. Mot de passe</div>
+        <video id="cam" autoplay playsinline muted></video>
+        <div id="camStatus" class="out info" style="display:block">Demarrage de la camera...</div>
+        <button id="btnScan" onclick="onScan()" disabled>Scanner mon visage</button>
+        <button class="alt" onclick="resetToUsername()">Annuler</button>
+      </div>
+
+      <!-- Etape 3 : mot de passe -->
+      <div id="step-password" style="display:none">
+        <h2>Mot de passe</h2>
+        <p class="sub">Visage reconnu. Saisissez votre mot de passe pour ouvrir le back-office.</p>
+        <div class="steps">1. Identifiant &rsaquo; 2. Visage &rsaquo; <b>3. Mot de passe</b></div>
+        <label>Identifiant</label>
+        <input id="userEcho" disabled />
+        <label>Mot de passe</label>
+        <input id="pass" type="password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')onPassword()" />
+        <button id="btnPass" onclick="onPassword()">Entrer</button>
+        <button class="alt" onclick="resetToUsername()">Recommencer</button>
+      </div>
+
+      <!-- Blocage -->
+      <div id="step-locked" style="display:none">
+        <h2>Acces bloque</h2>
+        <p class="sub">Trop de tentatives non reconnues. Veuillez patienter.</p>
+        <div class="countdown" id="lockCountdown">05:00</div>
+        <div class="hint">Le blocage se leve automatiquement a la fin du compte a rebours.</div>
+      </div>
+
+      <!-- Acces accorde -->
+      <div id="granted" style="display:none">
+        <span class="tag">ACCES AUTORISE</span>
+        <h2>Bienvenue, <span id="whoami">operateur</span></h2>
+        <p class="sub">Vous etes authentifie par visage et mot de passe. Contenu reserve au back-office.</p>
+        <div class="out ok" style="display:block">Session ouverte. Role : <b id="whorole">-</b>. Zone d'administration du SI RESILIENCE-ALPHA.</div>
+        <button class="alt" onclick="logout()">Se deconnecter</button>
+      </div>
+
+      <div id="accesOut" class="out"></div>
+    </div>
+
+    <!-- ================= HABILITATIONS ================= -->
+    <div id="admin" class="card" style="display:none">
+      <span class="tag">GESTION DES HABILITATIONS</span>
+      <h2>Administration des visages</h2>
+      <p class="sub">Enrolez, listez et revoquez les personnes autorisees. Acces protege par jeton administrateur.</p>
+
+      <label>Jeton administrateur</label>
+      <input id="adminToken" type="password" placeholder="jeton admin (voir .env : FACE_ADMIN_TOKEN)" />
+      <button onclick="loadUsers()">Charger la liste</button>
+      <div id="adminOut" class="out"></div>
+
+      <div id="adminPanel" style="display:none">
+        <hr style="margin:20px 0; border:0; border-top:1px solid #ecedf7" />
+        <h2 style="font-size:15px">Enroler une personne</h2>
+        <label>Identifiant</label>
+        <input id="enrollUser" autocomplete="off" placeholder="ex. alice" />
+        <label>Role</label>
+        <select id="enrollRole">
+          <option value="operateur">operateur</option>
+          <option value="administrateur">administrateur</option>
+          <option value="auditeur">auditeur</option>
+        </select>
+        <video id="camEnroll" autoplay playsinline muted></video>
+        <div id="enrollStatus" class="out info" style="display:block">Camera a demarrer pour capturer les photos.</div>
+        <button id="btnEnrollCam" onclick="startEnrollCam()">Demarrer la camera</button>
+        <button id="btnCapture" onclick="capture()" disabled>Capturer une photo (<span id="capCount">0</span>)</button>
+        <button id="btnEnrollSave" class="alt" onclick="saveEnroll()" disabled>Enregistrer l'enrolement</button>
+
+        <hr style="margin:20px 0; border:0; border-top:1px solid #ecedf7" />
+        <h2 style="font-size:15px">Personnes habilitees</h2>
+        <table id="usersTable"><thead><tr><th>Identifiant</th><th>Role</th><th>Photos</th><th>Etat</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="canvas" style="display:none"></canvas>
+
+  <script>
+    // ------------------------------------------------------------- utilitaires
+    const $ = (id) => document.getElementById(id);
+    const RED_PENALTY_MS = 30000;   // rouge fixe 30 s sur visage non reconnu (consigne)
+    let stream = null, enrollStream = null, captured = [], adminToken = "";
+
+    function show(el, ok, msg) { el.style.display = "block"; el.className = "out " + (ok===null?"info":(ok?"ok":"ko")); el.textContent = msg; }
+    function setLed(mode) { fetch("/api/led/state", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode})}).catch(()=>{}); }
+
+    function showTab(name) {
+      $("acces").style.display = name==="acces" ? "block" : "none";
+      $("admin").style.display = name==="admin" ? "block" : "none";
+      $("tabAcces").classList.toggle("active", name==="acces");
+      $("tabAdmin").classList.toggle("active", name==="admin");
+    }
+    function showStep(name) {
+      ["step-username","step-camera","step-password","step-locked","granted"].forEach(s =>
+        $(s).style.display = (s===name) ? "block" : "none");
+    }
+
+    // ------------------------------------------------------------- camera
+    async function startCamera(videoEl) {
+      stopCamera(videoEl);
+      const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+      videoEl.srcObject = s; await videoEl.play();
+      return s;
+    }
+    function stopCamera(videoEl) {
+      if (videoEl && videoEl.srcObject) { videoEl.srcObject.getTracks().forEach(t => t.stop()); videoEl.srcObject = null; }
+    }
+    function captureFrame(videoEl) {
+      const c = $("canvas");
+      c.width = videoEl.videoWidth || 640; c.height = videoEl.videoHeight || 480;
+      c.getContext("2d").drawImage(videoEl, 0, 0, c.width, c.height);
+      return c.toDataURL("image/jpeg", 0.85);
+    }
+
+    // ------------------------------------------------------------- flux d'acces
+    function resetToUsername() {
+      stopCamera($("cam"));
+      $("user").value = ""; $("pass").value = "";
+      setLed("off");
+      $("accesOut").style.display = "none";
+      showStep("step-username");
+    }
+    function logout() { resetToUsername(); }
+
+    async function onUsername() {
+      const u = $("user").value.trim();
+      if (!u) { show($("accesOut"), false, "Identifiant requis."); return; }
+      showStep("step-camera");
+      $("btnScan").disabled = true;
+      show($("camStatus"), null, "Demarrage de la camera...");
+      try {
+        stream = await startCamera($("cam"));
+        $("btnScan").disabled = false;
+        show($("camStatus"), null, "Camera active. Placez votre visage puis cliquez sur Scanner.");
+      } catch (e) {
+        show($("camStatus"), false, "Camera indisponible : " + e.message + "\nOuvrez le back-office en http://localhost sur le PC Hote.");
+      }
+    }
+
+    async function onScan() {
+      const u = $("user").value.trim();
+      $("btnScan").disabled = true;
+      show($("camStatus"), null, "Analyse du visage...");
+      const frame = captureFrame($("cam"));
+      let res;
+      try {
+        const r = await fetch("/api/face/verify", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({username:u, image:frame})});
+        res = await r.json();
+      } catch (e) { show($("camStatus"), false, "Service de reconnaissance indisponible."); $("btnScan").disabled=false; return; }
+
+      if (res.locked) { startLockout(res.retry_after || 300); return; }
+
+      if (res.recognized) {
+        setLed("green_blink");
+        stopCamera($("cam"));
+        $("userEcho").value = u;
+        $("pass").value = "";
+        showStep("step-password");
+        $("pass").focus();
+      } else {
+        // Visage non reconnu : rouge fixe 30 s, puis camera eteinte, puis nouvelle saisie.
+        setLed("red_30s");
+        show($("camStatus"), false, "Visage non reconnu (" + res.reason + "). Patientez " + (RED_PENALTY_MS/1000) + " s.");
+        let left = RED_PENALTY_MS/1000;
+        const iv = setInterval(() => {
+          left--; show($("camStatus"), false, "Visage non reconnu. Reprise dans " + left + " s.");
+          if (left <= 0) {
+            clearInterval(iv); stopCamera($("cam"));
+            if (res.attempts_left > 0) { show($("accesOut"), false, "Il vous reste " + res.attempts_left + " tentative."); }
+            resetToUsername();
+          }
+        }, 1000);
+      }
+    }
+
+    async function onPassword() {
+      const u = $("user").value.trim(), p = $("pass").value;
+      $("btnPass").disabled = true;
+      try {
+        const r = await fetch("/api/login", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({username:u, password:p})});
+        if (r.ok) {
+          const data = await r.json();
+          setLed("green_30s");
+          const claims = decodeJwt(data.access_token);
+          $("whoami").textContent = (claims && claims.sub) || u;
+          $("whorole").textContent = (claims && claims.role) || "operateur";
+          showStep("granted");
+        } else {
+          // Mauvais mot de passe : rouge clignotant 10x, puis toute la phase recommence.
+          setLed("red_blink_10");
+          show($("accesOut"), false, "Mot de passe incorrect. Reprise de l'identification.");
+          setTimeout(resetToUsername, 1500);
+        }
+      } catch (e) {
+        show($("accesOut"), false, "Service d'authentification indisponible.");
+      } finally { $("btnPass").disabled = false; }
+    }
+
+    function startLockout(seconds) {
+      showStep("step-locked");
+      let left = seconds;
+      const fmt = (s) => String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");
+      $("lockCountdown").textContent = fmt(left);
+      const iv = setInterval(() => {
+        left--; $("lockCountdown").textContent = fmt(Math.max(0,left));
+        if (left <= 0) { clearInterval(iv); resetToUsername(); }
+      }, 1000);
+    }
+
+    function decodeJwt(t) {
+      try { return JSON.parse(atob(t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))); }
+      catch (e) { return null; }
+    }
+
+    // ------------------------------------------------------------- habilitations
+    async function loadUsers() {
+      adminToken = $("adminToken").value;
+      try {
+        const r = await fetch("/api/face/users", { headers: { "X-Admin-Token": adminToken } });
+        if (r.status === 401) { show($("adminOut"), false, "Jeton administrateur invalide."); $("adminPanel").style.display="none"; return; }
+        const data = await r.json();
+        renderUsers(data.users || []);
+        $("adminPanel").style.display = "block";
+        show($("adminOut"), true, "Liste chargee (" + (data.users||[]).length + " personnes).");
+      } catch (e) { show($("adminOut"), false, "Erreur : " + e.message); }
+    }
+
+    function renderUsers(users) {
+      const tb = $("usersTable").querySelector("tbody"); tb.innerHTML = "";
+      users.forEach(u => {
+        const tr = document.createElement("tr");
+        const state = u.enabled ? '<span class="pill on">actif</span>' : '<span class="pill off">desactive</span>';
+        const lock = u.locked ? ' <span class="pill off">bloque</span>' : '';
+        tr.innerHTML = `<td>${u.username}</td><td>${u.role||""}</td><td>${u.samples}</td><td>${state}${lock}</td>
+          <td class="row-actions">
+            <button onclick="toggleUser('${u.username}',${!u.enabled})">${u.enabled?"Desactiver":"Activer"}</button>
+            <button onclick="revokeUser('${u.username}')">Revoquer</button>
+          </td>`;
+        tb.appendChild(tr);
+      });
+    }
+
+    async function toggleUser(username, enabled) {
+      await fetch(`/api/face/users/${encodeURIComponent(username)}/enabled?enabled=${enabled}`, {method:"POST", headers:{"X-Admin-Token":adminToken}});
+      loadUsers();
+    }
+    async function revokeUser(username) {
+      if (!confirm("Revoquer definitivement " + username + " ?")) return;
+      await fetch(`/api/face/users/${encodeURIComponent(username)}`, {method:"DELETE", headers:{"X-Admin-Token":adminToken}});
+      loadUsers();
+    }
+
+    async function startEnrollCam() {
+      try {
+        enrollStream = await startCamera($("camEnroll"));
+        captured = []; $("capCount").textContent = "0";
+        $("btnCapture").disabled = false; $("btnEnrollSave").disabled = true;
+        show($("enrollStatus"), null, "Camera active. Capturez 5 photos sous des angles legerement differents.");
+      } catch (e) { show($("enrollStatus"), false, "Camera indisponible : " + e.message); }
+    }
+    function capture() {
+      captured.push(captureFrame($("camEnroll")));
+      $("capCount").textContent = captured.length;
+      if (captured.length >= 3) $("btnEnrollSave").disabled = false;
+      show($("enrollStatus"), null, captured.length + " photo(s) capturee(s). 5 recommandees.");
+    }
+    async function saveEnroll() {
+      const u = $("enrollUser").value.trim();
+      if (!u) { show($("enrollStatus"), false, "Identifiant requis."); return; }
+      if (captured.length === 0) { show($("enrollStatus"), false, "Aucune photo capturee."); return; }
+      show($("enrollStatus"), null, "Enregistrement...");
+      try {
+        const r = await fetch("/api/face/enroll", {method:"POST",
+          headers:{"Content-Type":"application/json","X-Admin-Token":adminToken},
+          body: JSON.stringify({username:u, role:$("enrollRole").value, images:captured})});
+        const data = await r.json();
+        if (!r.ok) { show($("enrollStatus"), false, "Echec : " + (data.detail||r.status)); return; }
+        show($("enrollStatus"), true, "Enrole : " + data.faces_added + " visage(s) ajoute(s), " + data.samples_total + " au total.");
+        captured = []; $("capCount").textContent = "0"; $("btnEnrollSave").disabled = true;
+        stopCamera($("camEnroll")); $("btnCapture").disabled = true;
+        loadUsers();
+      } catch (e) { show($("enrollStatus"), false, "Erreur : " + e.message); }
+    }
+
+    // ------------------------------------------------------------- LED en direct
+    async function pollLed() {
+      try {
+        const r = await fetch("/api/led/state"); const s = await r.json();
+        const dot = $("ledDot");
+        dot.className = "led";
+        if (s.display === "green_on") dot.classList.add("green");
+        else if (s.display === "green_blink") dot.classList.add("green","blink");
+        else if (s.display === "red_on") dot.classList.add("red");
+        else if (s.display === "red_blink") dot.classList.add("red","blink");
+      } catch (e) {}
+    }
+    setInterval(pollLed, 350);
+
+    // Etat initial
+    setLed("off");
+    showStep("step-username");
+  </script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simulateur LED bicolore - RESILIENCE-ALPHA</title>
+  <style>
+    * { box-sizing:border-box; font-family: system-ui, Segoe UI, Roboto, sans-serif; }
+    body { margin:0; min-height:100vh; background:#0d0b1a; color:#cdd0ee; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; }
+    .title { font-size:14px; letter-spacing:1px; color:#6f72a8; text-transform:uppercase; }
+    .led { width:200px; height:200px; border-radius:50%; background:#2a2a38; box-shadow:0 0 0 10px rgba(255,255,255,.03) inset; transition:background .1s; }
+    .led.green { background:#1f9d57; box-shadow:0 0 90px 10px #1f9d57; }
+    .led.red { background:#cf2e2e; box-shadow:0 0 90px 10px #cf2e2e; }
+    .led.blink { animation: blink 1s steps(1) infinite; }
+    @keyframes blink { 50% { opacity:.08; box-shadow:none; } }
+    .state { font-size:22px; font-weight:700; color:#fff; }
+    .mode { font-size:13px; color:#6f72a8; }
+    .legend { position:fixed; bottom:18px; font-size:12px; color:#4b4e78; max-width:620px; text-align:center; line-height:1.6; padding:0 16px; }
+  </style>
+</head>
+<body>
+  <div class="title">Objet connecte - LED bicolore (rouge / vert)</div>
+  <div class="led" id="led"></div>
+  <div class="state" id="state">eteinte</div>
+  <div class="mode" id="mode">en attente...</div>
+  <div class="legend">
+    Reflet en direct de l'etat pilote par le back-office. Vert clignotant : identite reconnue, saisie du mot de passe.
+    Vert fixe : acces accorde. Rouge clignotant : mot de passe refuse. Rouge fixe : visage non reconnu.
+  </div>
+
+  <script>
+    const LABELS = { off:"eteinte", green_on:"vert fixe", green_blink:"vert clignotant", red_on:"rouge fixe", red_blink:"rouge clignotant" };
+    async function poll() {
+      try {
+        const r = await fetch("/api/led/state"); const s = await r.json();
+        const led = document.getElementById("led");
+        led.className = "led";
+        if (s.display === "green_on") led.classList.add("green");
+        else if (s.display === "green_blink") led.classList.add("green","blink");
+        else if (s.display === "red_on") led.classList.add("red");
+        else if (s.display === "red_blink") led.classList.add("red","blink");
+        document.getElementById("state").textContent = LABELS[s.display] || s.display;
+        document.getElementById("mode").textContent = "etat : " + s.mode;
+      } catch (e) {
+        document.getElementById("mode").textContent = "led-service injoignable";
+      }
+    }
+    setInterval(poll, 300); poll();
+  </script>
+</body>
+</html>

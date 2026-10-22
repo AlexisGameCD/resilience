@@ -23,6 +23,7 @@ volumes:
   vault-data:
   chroma-data:
   semaphore-data:
+  face-data:
 
 services:
 
@@ -288,6 +289,44 @@ services:
     networks: [backnet, frontnet]
     restart: unless-stopped
     logging: *default-logging
+  # ---------------------------------------------- consigne 1 : authentification renforcee
+  face-service:
+    build: ./services/face-service
+    environment:
+      FACE_ADMIN_TOKEN: ${FACE_ADMIN_TOKEN:-admin-resilience-2026}
+      FACE_LBPH_THRESHOLD: ${FACE_LBPH_THRESHOLD:-70}
+      FACE_MAX_FAILS: ${FACE_MAX_FAILS:-2}
+      FACE_LOCK_SECONDS: ${FACE_LOCK_SECONDS:-300}
+      LOG_LEVEL: INFO
+    volumes:
+      - face-data:/data/faces
+    networks: [backnet]
+    restart: unless-stopped
+    logging: *default-logging
+
+  led-service:
+    build: ./services/led-service
+    environment:
+      LED_BLINK_MS: ${LED_BLINK_MS:-500}
+      LOG_LEVEL: INFO
+    ports:
+      - "8085:8000"
+    networks: [backnet, frontnet]
+    restart: unless-stopped
+    logging: *default-logging
+
+  back-office:
+    build: ./services/back-office
+    ports:
+      - "8083:80"
+    networks: [backnet, frontnet]
+    depends_on:
+      - face-service
+      - led-service
+      - auth-service
+    restart: unless-stopped
+    logging: *default-logging
+
   # ---------------------------------------------------------------- dashboard supervision
   dashboard:
     build: ./services/dashboard
